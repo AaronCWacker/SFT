@@ -42,7 +42,7 @@ class ModelConfig:
     def model_path(self):
         return f"models/{self.name}"
 
-# Custom Dataset for SFT
+# Custom Dataset for SFT (Fixed)
 class SFTDataset(Dataset):
     def __init__(self, data, tokenizer, max_length=128):
         self.data = data
@@ -56,18 +56,39 @@ class SFTDataset(Dataset):
         prompt = self.data[idx]["prompt"]
         response = self.data[idx]["response"]
         
-        prompt_encoding = self.tokenizer(prompt, max_length=self.max_length // 2, padding="max_length", truncation=True, return_tensors="pt")
+        # Tokenize the full sequence once
         full_text = f"{prompt} {response}"
-        full_encoding = self.tokenizer(full_text, max_length=self.max_length, padding="max_length", truncation=True, return_tensors="pt")
+        full_encoding = self.tokenizer(
+            full_text,
+            max_length=self.max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt"
+        )
         
-        input_ids = prompt_encoding["input_ids"].squeeze()
-        attention_mask = prompt_encoding["attention_mask"].squeeze()
-        labels = full_encoding["input_ids"].squeeze()
+        # Tokenize prompt separately to get its length
+        prompt_encoding = self.tokenizer(
+            prompt,
+            max_length=self.max_length,
+            padding=False,  # No padding here, just to get length
+            truncation=True,
+            return_tensors="pt"
+        )
         
-        prompt_len = prompt_encoding["input_ids"].ne(self.tokenizer.pad_token_id).sum().item()
-        labels[:prompt_len] = -100
+        input_ids = full_encoding["input_ids"].squeeze()
+        attention_mask = full_encoding["attention_mask"].squeeze()
+        labels = input_ids.clone()  # Clone to avoid modifying input_ids
         
-        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        # Mask prompt tokens in labels
+        prompt_len = prompt_encoding["input_ids"].shape[1]  # Actual length of prompt
+        if prompt_len < self.max_length:
+            labels[:prompt_len] = -100  # Ignore prompt in loss
+        
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels
+        }
 
 # Model Builder Class with Easter Egg Jokes
 class ModelBuilder:
@@ -111,6 +132,10 @@ class ModelBuilder:
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
                     labels = batch["labels"].to(device)
+                    
+                    # Debug shapes
+                    assert input_ids.shape[0] == labels.shape[0], f"Batch size mismatch: input_ids {input_ids.shape}, labels {labels.shape}"
+                    
                     outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     loss = outputs.loss
                     loss.backward()
