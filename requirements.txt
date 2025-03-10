@@ -2,3 +2,5 @@ streamlit
 torch
 pandas
 transformers
+smolagents
+Pillow
