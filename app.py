@@ -16,8 +16,13 @@ import zipfile
 import math
 from PIL import Image
 import random
+import logging
 
-# Page Configuration with a Dash of Humor
+# Set up logging for feedback
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Page Configuration with Humor
 st.set_page_config(
     page_title="SFT Tiny Titans 🚀",
     page_icon="🤖",
@@ -42,7 +47,7 @@ class ModelConfig:
     def model_path(self):
         return f"models/{self.name}"
 
-# Custom Dataset for SFT (Fixed)
+# Custom Dataset for SFT
 class SFTDataset(Dataset):
     def __init__(self, data, tokenizer, max_length=128):
         self.data = data
@@ -56,7 +61,6 @@ class SFTDataset(Dataset):
         prompt = self.data[idx]["prompt"]
         response = self.data[idx]["response"]
         
-        # Tokenize the full sequence once
         full_text = f"{prompt} {response}"
         full_encoding = self.tokenizer(
             full_text,
@@ -66,23 +70,21 @@ class SFTDataset(Dataset):
             return_tensors="pt"
         )
         
-        # Tokenize prompt separately to get its length
         prompt_encoding = self.tokenizer(
             prompt,
             max_length=self.max_length,
-            padding=False,  # No padding here, just to get length
+            padding=False,
             truncation=True,
             return_tensors="pt"
         )
         
         input_ids = full_encoding["input_ids"].squeeze()
         attention_mask = full_encoding["attention_mask"].squeeze()
-        labels = input_ids.clone()  # Clone to avoid modifying input_ids
+        labels = input_ids.clone()
         
-        # Mask prompt tokens in labels
-        prompt_len = prompt_encoding["input_ids"].shape[1]  # Actual length of prompt
+        prompt_len = prompt_encoding["input_ids"].shape[1]
         if prompt_len < self.max_length:
-            labels[:prompt_len] = -100  # Ignore prompt in loss
+            labels[:prompt_len] = -100
         
         return {
             "input_ids": input_ids,
@@ -133,7 +135,6 @@ class ModelBuilder:
                     attention_mask = batch["attention_mask"].to(device)
                     labels = batch["labels"].to(device)
                     
-                    # Debug shapes
                     assert input_ids.shape[0] == labels.shape[0], f"Batch size mismatch: input_ids {input_ids.shape}, labels {labels.shape}"
                     
                     outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
@@ -152,12 +153,37 @@ class ModelBuilder:
             self.tokenizer.save_pretrained(path)
         st.success(f"Model saved at {path}! ✅ May the force be with it.")
 
-    def evaluate(self, prompt: str):
+    def evaluate(self, prompt: str, status_container=None):
+        """Evaluate with feedback"""
         self.model.eval()
-        with torch.no_grad():
-            inputs = self.tokenizer(prompt, return_tensors="pt", max_length=128, truncation=True).to(self.model.device)
-            outputs = self.model.generate(**inputs, max_new_tokens=50, do_sample=True, top_p=0.95, temperature=0.7)
-            return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        if status_container:
+            status_container.write("Preparing to evaluate... 🧠 (Titan’s warming up its circuits!)")
+        logger.info(f"Evaluating prompt: {prompt}")
+        
+        try:
+            with torch.no_grad():
+                inputs = self.tokenizer(prompt, return_tensors="pt", max_length=128, truncation=True).to(self.model.device)
+                if status_container:
+                    status_container.write(f"Tokenized input shape: {inputs['input_ids'].shape} 📏")
+                
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=50,
+                    do_sample=True,
+                    top_p=0.95,
+                    temperature=0.7
+                )
+                if status_container:
+                    status_container.write("Generation complete! Decoding response... 🗣")
+                
+                result = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                logger.info(f"Generated response: {result}")
+                return result
+        except Exception as e:
+            logger.error(f"Evaluation error: {str(e)}")
+            if status_container:
+                status_container.error(f"Oops! Something broke: {str(e)} 💥 (Titan tripped over a wire!)")
+            return f"Error: {str(e)}"
 
 # Utility Functions with Wit
 def get_download_link(file_path, mime_type="text/plain", label="Download"):
@@ -209,14 +235,14 @@ img_files = get_gallery_files(["png", "jpg", "jpeg"])
 if img_files:
     img_cols = st.sidebar.slider("Image Columns 📸", 1, 5, 3)
     cols = st.sidebar.columns(img_cols)
-    for idx, img_file in enumerate(img_files[:img_cols * 2]):  # Limit to 2 rows
+    for idx, img_file in enumerate(img_files[:img_cols * 2]):
         with cols[idx % img_cols]:
             st.image(Image.open(img_file), caption=f"{img_file} 🖼", use_column_width=True)
 
 st.sidebar.subheader("CSV Gallery 📊")
 csv_files = get_gallery_files(["csv"])
 if csv_files:
-    for csv_file in csv_files[:5]:  # Limit to 5
+    for csv_file in csv_files[:5]:
         st.sidebar.markdown(get_download_link(csv_file, "text/csv", f"{csv_file} 📊"), unsafe_allow_html=True)
 
 st.sidebar.subheader("Model Management 🗂️")
@@ -302,19 +328,25 @@ with tab3:
     else:
         if st.session_state['builder'].sft_data:
             st.write("Testing with SFT Data:")
-            for item in st.session_state['builder'].sft_data[:3]:
-                prompt = item["prompt"]
-                expected = item["response"]
-                generated = st.session_state['builder'].evaluate(prompt)
-                st.write(f"**Prompt**: {prompt}")
-                st.write(f"**Expected**: {expected}")
-                st.write(f"**Generated**: {generated} (Titan says: '{random.choice(['Bleep bloop!', 'I am groot!', '42!'])}')")
-                st.write("---")
+            with st.spinner("Running SFT data tests... ⏳ (Titan’s flexing its brain muscles!)"):
+                for item in st.session_state['builder'].sft_data[:3]:
+                    prompt = item["prompt"]
+                    expected = item["response"]
+                    status_container = st.empty()
+                    generated = st.session_state['builder'].evaluate(prompt, status_container)
+                    st.write(f"**Prompt**: {prompt}")
+                    st.write(f"**Expected**: {expected}")
+                    st.write(f"**Generated**: {generated} (Titan says: '{random.choice(['Bleep bloop!', 'I am groot!', '42!'])}')")
+                    st.write("---")
+                    status_container.empty()  # Clear status after each test
 
         test_prompt = st.text_area("Enter Test Prompt", "What is AI?")
         if st.button("Run Test ▶️"):
-            result = st.session_state['builder'].evaluate(test_prompt)
-            st.write(f"**Generated Response**: {result} (Titan’s wisdom unleashed!)")
+            with st.spinner("Testing your prompt... ⏳ (Titan’s pondering deeply!)"):
+                status_container = st.empty()
+                result = st.session_state['builder'].evaluate(test_prompt, status_container)
+                st.write(f"**Generated Response**: {result} (Titan’s wisdom unleashed!)")
+                status_container.empty()
 
         if st.button("Export Titan Files 📦"):
             config = st.session_state['builder'].config
@@ -361,11 +393,9 @@ with tab4:
         try:
             from smolagents import CodeAgent, DuckDuckGoSearchTool, VisitWebpageTool
 
-            # Load a tiny model (default to SmolLM-135M for speed)
             tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
             model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM-135M")
 
-            # Define Agentic RAG agent with a witty twist
             agent = CodeAgent(
                 model=model,
                 tokenizer=tokenizer,
