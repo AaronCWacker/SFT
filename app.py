@@ -387,18 +387,21 @@ if st.button("Generate"):
 
 with tab4:
     st.header("Agentic RAG Party 🌐 (Party Like It’s 2099!)")
-    st.write("This demo uses tiny Titans with Agentic RAG to plan a superhero party, powered by DuckDuckGo retrieval!")
+    st.write("This demo uses Tiny Titans with Agentic RAG to plan a superhero party, powered by DuckDuckGo retrieval!")
 
     if st.button("Run Agentic RAG Demo 🎉"):
         try:
             from smolagents import CodeAgent, DuckDuckGoSearchTool, VisitWebpageTool
+            from transformers import AutoModelForCausalLM
 
-            tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM-135M")
-            model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM-135M")
+            # Load the model without separate tokenizer for agent
+            with st.spinner("Loading SmolLM-135M... ⏳ (Titan’s suiting up!)"):
+                model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM-135M")
+                st.write("Model loaded! 🦸‍♂️ (Ready to party!)")
 
+            # Initialize agent without tokenizer argument
             agent = CodeAgent(
                 model=model,
-                tokenizer=tokenizer,
                 tools=[DuckDuckGoSearchTool(), VisitWebpageTool(), calculate_cargo_travel_time],
                 additional_authorized_imports=["pandas"],
                 planning_interval=5,
@@ -415,10 +418,12 @@ Add a random superhero catchphrase to each entry for fun!
 """
             with st.spinner("Planning the ultimate superhero bash... ⏳ (Calling all caped crusaders!)"):
                 result = agent.run(task)
-            st.write("Agentic RAG Party Plan:")
-            st.write(result)
-            st.write("Party on, Wayne! 🦸‍♂️🎉")
+                st.write("Agentic RAG Party Plan:")
+                st.write(result)
+                st.write("Party on, Wayne! 🦸‍♂️🎉")
         except ImportError:
-            st.error("Please install required packages: `pip install smolagents pandas`")
+            st.error("Please install required packages: `pip install smolagents pandas transformers`")
+        except TypeError as e:
+            st.error(f"Agent setup failed: {str(e)} (Looks like the Titans need a tune-up!)")
         except Exception as e:
             st.error(f"Error running demo: {str(e)} (Even Batman has off days!)")
