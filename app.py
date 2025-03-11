@@ -37,12 +37,22 @@ st.set_page_config(
 
 # [Previous sections like ModelConfig, SFTDataset, ModelBuilder, Utility Functions remain unchanged...]
 
-# Cargo Travel Time Tool (Now a Proper smolagents Tool)
+# Cargo Travel Time Tool with Detailed Docstring
 from smolagents import tool
 
 @tool
 def calculate_cargo_travel_time(origin_coords: Tuple[float, float], destination_coords: Tuple[float, float], cruising_speed_kmh: float = 750.0) -> float:
-    """Calculate cargo plane travel time between two coordinates."""
+    """
+    Calculate cargo plane travel time between two coordinates using the great-circle distance.
+
+    Args:
+        origin_coords (Tuple[float, float]): Latitude and longitude of the starting point (e.g., (42.3601, -71.0589)).
+        destination_coords (Tuple[float, float]): Latitude and longitude of the destination (e.g., (40.7128, -74.0060)).
+        cruising_speed_kmh (float): Speed of the cargo plane in kilometers per hour (default: 750.0).
+
+    Returns:
+        float: Travel time in hours, rounded to two decimal places.
+    """
     def to_radians(degrees: float) -> float:
         return degrees * (math.pi / 180)
     lat1, lon1 = map(to_radians, origin_coords)
@@ -53,8 +63,8 @@ def calculate_cargo_travel_time(origin_coords: Tuple[float, float], destination_
     a = (math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
     c = 2 * math.asin(math.sqrt(a))
     distance = EARTH_RADIUS_KM * c
-    actual_distance = distance * 1.1
-    flight_time = (actual_distance / cruising_speed_kmh) + 1.0
+    actual_distance = distance * 1.1  # 10% buffer for real-world routes
+    flight_time = (actual_distance / cruising_speed_kmh) + 1.0  # Add 1 hour for takeoff/landing
     return round(flight_time, 2)
 
 # Main App
@@ -88,7 +98,7 @@ if selected_model != "None" and st.sidebar.button("Load Model 📂"):
     st.session_state['model_loaded'] = True
     st.rerun()
 
-# Main UI with Tabs (only Tab 4 updated here)
+# Main UI with Tabs (only Tab 4 shown here for brevity)
 tab1, tab2, tab3, tab4 = st.tabs(["Build Tiny Titan 🌱", "Fine-Tune Titan 🔧", "Test Titan 🧪", "Agentic RAG Party 🌐"])
 
 # [Tab 1, Tab 2, Tab 3 remain unchanged...]
