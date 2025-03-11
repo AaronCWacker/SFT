@@ -11,28 +11,16 @@ license: mit
 short_description: Torch and Transformers Demonstration - SFT NLP and CV ML
 ---
 
-LiST: Lite Prompted Self-training Makes Parameter-Efficient Few-shot Learners — Arxiv Link)
-Composable Sparse Fine-Tuning for Cross-Lingual Transfer — Arxiv Link)
-Efficient Fine-Tuning of Compressed Language Models with Learners — Arxiv Link)
-Task Adaptive Parameter Sharing for Multi-Task Learning — Arxiv Link)
-RAG vs Fine-tuning: Pipelines, Tradeoffs, and a Case Study on Agriculture — Arxiv Link)
-Scaling Sparse Fine-Tuning to Large Language Models — Arxiv Link)
-Exploring and Evaluating Personalized Models for Code Generation — Arxiv Link)
-UniPT: Universal Parallel Tuning for Transfer Learning with Efficient Parameter and Memory — Arxiv Link)
-Weaver: Foundation Models for Creative Writing — Arxiv Link)
-PERFECT: Prompt-free and Efficient Few-shot Learning with Language Models — Arxiv Link)
-AdaMix: Mixture-of-Adaptations for Parameter-efficient Model Tuning — Arxiv Link)
-AdaMix: Mixture-of-Adaptations for Parameter-efficient Model Tuning — Arxiv Link)
-ComPEFT: Compression for Communicating Parameter Efficient Updates via Sparsification and Quantization — Arxiv Link)
-Bit Cipher -- A Simple yet Powerful Word Representation System that Integrates Efficiently with Language Models — Arxiv Link)
-ConES: Concept Embedding Search for Parameter Efficient Tuning Large Vision Language Models — Arxiv Link)
-LeTI: Learning to Generate from Textual Interactions — Arxiv Link)
-Polyhistor: Parameter-Efficient Multi-Task Adaptation for Dense Vision Tasks — Arxiv Link)
-DSEE: Dually Sparsity-embedded Efficient Tuning of Pre-trained Language Models — Arxiv Link)
-SPT: Semi-Parametric Prompt Tuning for Multitask Prompted Learning — Arxiv Link)
-HyperTuning: Toward Adapting Large Language Models without Back-propagation — Arxiv Link)
+Deep Research Evaluator:
+https://huggingface.co/spaces/awacke1/DeepResearchEvaluator
 
-With torch, transformers, and specialized fine tuning of small models we can build to specification of input dataset and easily create RAG agents with fine tuned models using duckduckgo and smolagents.  Show state of art SFT for agentic RAG to help manage models and gain ROI.
+
+With torch, transformers, and specialized fine tuning of small models 
+1. We can build to specification of input dataset and 
+2. Easily create RAG agents with fine tuned models using duckduckgo and smolagents.  
+3. Show state of art SFT for agentic RAG to help manage models and gain ROI.
+
+
 
 # Detailed Research Paper Summary
 
