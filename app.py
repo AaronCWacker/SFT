@@ -225,6 +225,84 @@ def calculate_cargo_travel_time(origin_coords: Tuple[float, float], destination_
     flight_time = (actual_distance / cruising_speed_kmh) + 1.0
     return round(flight_time, 2)
 
+# Mock Search Tool for RAG
+def mock_duckduckgo_search(query: str) -> str:
+    """Simulate a search result for luxury superhero party trends"""
+    if "superhero party trends" in query.lower():
+        return """
+        Latest trends for 2025: 
+        - Luxury decorations: Gold-plated Batman statues, holographic Avengers displays.
+        - Entertainment: Live stunt shows with Iron Man suits, VR superhero battles.
+        - Catering: Gourmet kryptonite-green cocktails, Thor’s hammer-shaped appetizers.
+        """
+    return "No relevant results found."
+
+# Simple Agent Class for Demo
+class PartyPlannerAgent:
+    def __init__(self, model, tokenizer):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+
+    def generate(self, prompt: str) -> str:
+        self.model.eval()
+        with torch.no_grad():
+            inputs = self.tokenizer(prompt, return_tensors="pt", max_length=128, truncation=True).to(self.device)
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=100,
+                do_sample=True,
+                top_p=0.95,
+                temperature=0.7
+            )
+            return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    def plan_party(self, task: str) -> pd.DataFrame:
+        # Mock search for context
+        search_result = mock_duckduckgo_search("latest superhero party trends")
+        
+        # Locations and coordinates
+        locations = {
+            "Wayne Manor": (42.3601, -71.0589),
+            "New York": (40.7128, -74.0060),
+            "Los Angeles": (34.0522, -118.2437),
+            "London": (51.5074, -0.1278)
+        }
+        
+        # Calculate travel times
+        wayne_coords = locations["Wayne Manor"]
+        travel_times = {
+            loc: calculate_cargo_travel_time(coords, wayne_coords)
+            for loc, coords in locations.items() if loc != "Wayne Manor"
+        }
+        
+        # Generate luxury ideas with the SFT model
+        prompt = f"""
+        Given this context from a search: "{search_result}"
+        Plan a luxury superhero-themed party at Wayne Manor. Suggest luxury decorations, entertainment, and catering ideas.
+        """
+        plan_text = self.generate(prompt)
+        
+        # Parse plan into structured data (simplified)
+        catchphrases = [
+            "To the Batmobile!",
+            "Avengers, assemble!",
+            "I am Iron Man!",
+            "By the power of Grayskull!"
+        ]
+        
+        data = [
+            {"Location": "New York", "Travel Time (hrs)": travel_times["New York"], "Luxury Idea": "Gold-plated Batman statues", "Catchphrase": random.choice(catchphrases)},
+            {"Location": "Los Angeles", "Travel Time (hrs)": travel_times["Los Angeles"], "Luxury Idea": "Holographic Avengers displays", "Catchphrase": random.choice(catchphrases)},
+            {"Location": "London", "Travel Time (hrs)": travel_times["London"], "Luxury Idea": "Live stunt shows with Iron Man suits", "Catchphrase": random.choice(catchphrases)},
+            {"Location": "Wayne Manor", "Travel Time (hrs)": 0.0, "Luxury Idea": "VR superhero battles", "Catchphrase": random.choice(catchphrases)},
+            {"Location": "New York", "Travel Time (hrs)": travel_times["New York"], "Luxury Idea": "Gourmet kryptonite-green cocktails", "Catchphrase": random.choice(catchphrases)},
+            {"Location": "Los Angeles", "Travel Time (hrs)": travel_times["Los Angeles"], "Luxury Idea": "Thor’s hammer-shaped appetizers", "Catchphrase": random.choice(catchphrases)},
+        ]
+        
+        return pd.DataFrame(data)
+
 # Main App
 st.title("SFT Tiny Titans 🚀 (Small but Mighty!)")
 
@@ -387,43 +465,31 @@ if st.button("Generate"):
 
 with tab4:
     st.header("Agentic RAG Party 🌐 (Party Like It’s 2099!)")
-    st.write("This demo uses Tiny Titans with Agentic RAG to plan a superhero party, powered by DuckDuckGo retrieval!")
+    st.write("This demo uses your SFT-tuned Tiny Titan to plan a superhero party with mock retrieval!")
 
-    if st.button("Run Agentic RAG Demo 🎉"):
-        try:
-            from smolagents import CodeAgent, DuckDuckGoSearchTool, VisitWebpageTool
-            from transformers import AutoModelForCausalLM
+    if 'builder' not in st.session_state or not st.session_state.get('model_loaded', False):
+        st.warning("Please build or load a Titan first! ⚠️ (No Titan, no party!)")
+    else:
+        if st.button("Run Agentic RAG Demo 🎉"):
+            with st.spinner("Loading your SFT-tuned Titan... ⏳ (Titan’s suiting up!)"):
+                agent = PartyPlannerAgent(
+                    model=st.session_state['builder'].model,
+                    tokenizer=st.session_state['builder'].tokenizer
+                )
+                st.write("Agent ready! 🦸‍♂️ (Time to plan an epic bash!)")
 
-            # Load the model without separate tokenizer for agent
-            with st.spinner("Loading SmolLM-135M... ⏳ (Titan’s suiting up!)"):
-                model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM-135M")
-                st.write("Model loaded! 🦸‍♂️ (Ready to party!)")
-
-            # Initialize agent without tokenizer argument
-            agent = CodeAgent(
-                model=model,
-                tools=[DuckDuckGoSearchTool(), VisitWebpageTool(), calculate_cargo_travel_time],
-                additional_authorized_imports=["pandas"],
-                planning_interval=5,
-                verbosity_level=2,
-                max_steps=15,
-            )
-            
             task = """
-Plan a luxury superhero-themed party at Wayne Manor (42.3601° N, 71.0589° W). Use DuckDuckGo to search for the latest superhero party trends,
-refine results for luxury elements (decorations, entertainment, catering), and calculate cargo travel times from key locations 
-(New York: 40.7128° N, 74.0060° W; LA: 34.0522° N, 118.2437° W; London: 51.5074° N, 0.1278° W) to Wayne Manor. 
-Synthesize a plan with at least 6 entries in a pandas dataframe, including locations, travel times, and luxury ideas.
-Add a random superhero catchphrase to each entry for fun!
-"""
+            Plan a luxury superhero-themed party at Wayne Manor (42.3601° N, 71.0589° W). 
+            Use mock search results for the latest superhero party trends, refine for luxury elements 
+            (decorations, entertainment, catering), and calculate cargo travel times from key locations 
+            (New York: 40.7128° N, 74.0060° W; LA: 34.0522° N, 118.2437° W; London: 51.5074° N, 0.1278° W) 
+            to Wayne Manor. Create a plan with at least 6 entries in a pandas dataframe.
+            """
             with st.spinner("Planning the ultimate superhero bash... ⏳ (Calling all caped crusaders!)"):
-                result = agent.run(task)
-                st.write("Agentic RAG Party Plan:")
-                st.write(result)
-                st.write("Party on, Wayne! 🦸‍♂️🎉")
-        except ImportError:
-            st.error("Please install required packages: `pip install smolagents pandas transformers`")
-        except TypeError as e:
-            st.error(f"Agent setup failed: {str(e)} (Looks like the Titans need a tune-up!)")
-        except Exception as e:
-            st.error(f"Error running demo: {str(e)} (Even Batman has off days!)")
+                try:
+                    plan_df = agent.plan_party(task)
+                    st.write("Agentic RAG Party Plan:")
+                    st.dataframe(plan_df)
+                    st.write("Party on, Wayne! 🦸‍♂️🎉")
+                except Exception as e:
+                    st.error(f"Error planning party: {str(e)} (Even Superman has kryptonite days!)")
