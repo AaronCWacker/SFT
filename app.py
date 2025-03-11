@@ -37,7 +37,7 @@ st.set_page_config(
 
 # [Previous sections like ModelConfig, SFTDataset, ModelBuilder, Utility Functions remain unchanged...]
 
-# Cargo Travel Time Tool with Detailed Docstring
+# Cargo Travel Time Tool with Refined Docstring
 from smolagents import tool
 
 @tool
@@ -46,12 +46,12 @@ def calculate_cargo_travel_time(origin_coords: Tuple[float, float], destination_
     Calculate cargo plane travel time between two coordinates using the great-circle distance.
 
     Args:
-        origin_coords (Tuple[float, float]): Latitude and longitude of the starting point (e.g., (42.3601, -71.0589)).
-        destination_coords (Tuple[float, float]): Latitude and longitude of the destination (e.g., (40.7128, -74.0060)).
-        cruising_speed_kmh (float): Speed of the cargo plane in kilometers per hour (default: 750.0).
+        origin_coords (Tuple[float, float]): The latitude and longitude of the starting point in degrees, e.g., (42.3601, -71.0589).
+        destination_coords (Tuple[float, float]): The latitude and longitude of the destination in degrees, e.g., (40.7128, -74.0060).
+        cruising_speed_kmh (float, optional): The cruising speed of the cargo plane in kilometers per hour. Defaults to 750.0.
 
     Returns:
-        float: Travel time in hours, rounded to two decimal places.
+        float: The estimated travel time in hours, rounded to two decimal places, including takeoff and landing time.
     """
     def to_radians(degrees: float) -> float:
         return degrees * (math.pi / 180)
