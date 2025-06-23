@@ -313,3 +313,15 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as
 
 if __name__ == "__main__":
     demo.launch()
+
+
+
+gradio
+reportlab
+PyMuPDF
+Pillow
+pypdf
+openpyxl
+python-docx
+openai>=1.0.0
+python-dotenv
