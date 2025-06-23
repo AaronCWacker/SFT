@@ -1,0 +1,7 @@
+gradio
+reportlab
+PyMuPDF
+Pillow
+pypdf
+openpyxl
+python-docx
