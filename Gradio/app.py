@@ -32,6 +32,13 @@ FONT_DIR = CWD
 OUTPUT_DIR.mkdir(exist_ok=True)
 PREVIEW_DIR.mkdir(exist_ok=True)
 
+LAYOUTS = {
+    "A4 Portrait": {"size": A4},
+    "A4 Landscape": {"size": landscape(A4)},
+    "Letter Portrait": {"size": letter},
+    "Letter Landscape": {"size": landscape(letter)},
+}
+
 # 🧠 Initialize Azure OpenAI Client
 # NOTE: This requires AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY in your environment.
 try:
@@ -270,6 +277,8 @@ def generate_outputs_api(omni_file, omni_prompt, chat_model, transcribe_model, o
 
 # --- 🎨 Gradio UI Definition ---
 AVAILABLE_FONTS, EMOJI_FONT_NAME = register_local_fonts()
+SAMPLE_MARKDOWN = "# Deities Guide\n\n- **Purpose**: Explore deities and their morals! \n- **Themes**: Justice ⚖️, faith 🙏\n\n# Arthurian Legends\n\n - **Merlin, Arthur**: Mentor 🧙, son 👑.\n - **Lesson**: Honor 🎖️ vs. betrayal 🗡️."
+with open(CWD / "sample.md", "w", encoding="utf-8") as f: f.write(SAMPLE_MARKDOWN)
 
 with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as demo:
     gr.Markdown("# 🧠 Omni-Model Document Generator (PDF, DOCX, XLSX)")
@@ -313,15 +322,3 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as
 
 if __name__ == "__main__":
     demo.launch()
-
-
-
-gradio
-reportlab
-PyMuPDF
-Pillow
-pypdf
-openpyxl
-python-docx
-openai>=1.0.0
-python-dotenv
