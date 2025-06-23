@@ -44,7 +44,7 @@ LAYOUTS = {
 try:
     client = AzureOpenAI(
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_version="2024-05-01-preview",  # A recent, compatible API version
+        api_version="2024-05-01-preview",
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     )
     AZURE_CLIENT_AVAILABLE = True
@@ -179,6 +179,41 @@ def process_audio_input(audio_file, prompt, chat_model_deployment, transcribe_mo
     full_prompt = f"{prompt}\n\nAudio Transcription:\n{transcription}"
     return process_text_input(full_prompt, chat_model_deployment)
 
+def process_pdf_input(pdf_file, prompt, model_deployment_name, progress):
+    """📄 Performs OCR on a PDF by sending pages as images to the AI model."""
+    if not AZURE_CLIENT_AVAILABLE: return "Azure OpenAI client not configured. This is a dummy PDF summary."
+    
+    all_extracted_text = []
+    doc = fitz.open(pdf_file.name)
+    
+    # Process pages in pairs
+    for i in progress.tqdm(range(0, len(doc), 2), desc="Performing PDF OCR"):
+        page_images = []
+        messages = [{"type": "text", "text": prompt}]
+
+        # Get first page of the pair
+        page1 = doc.load_page(i)
+        pix1 = page1.get_pixmap(dpi=150)
+        img_bytes1 = pix1.tobytes("png")
+        base64_image1 = base64.b64encode(img_bytes1).decode("utf-8")
+        messages.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image1}"}})
+
+        # Get second page if it exists
+        if i + 1 < len(doc):
+            page2 = doc.load_page(i + 1)
+            pix2 = page2.get_pixmap(dpi=150)
+            img_bytes2 = pix2.tobytes("png")
+            base64_image2 = base64.b64encode(img_bytes2).decode("utf-8")
+            messages.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image2}"}})
+        
+        response = client.chat.completions.create(
+            model=model_deployment_name,
+            messages=[{"role": "user", "content": messages}]
+        )
+        all_extracted_text.append(response.choices[0].message.content)
+
+    return "\n\n".join(all_extracted_text)
+
 
 # --- 🛠️ Helpers & Main API ---
 
@@ -217,12 +252,11 @@ def create_pdf_preview(pdf_path: Path):
         return str(preview_path)
     except: return None
 
-def generate_outputs_api(omni_file, omni_prompt, chat_model, transcribe_model, output_formats, layouts, fonts, num_columns, page_w_mult, page_h_mult, progress=gr.Progress(track_tqdm=True)):
+def generate_outputs_api(omni_files, omni_prompt, chat_model, transcribe_model, output_formats, layouts, fonts, num_columns, page_w_mult, page_h_mult, progress=gr.Progress(track_tqdm=True)):
     """🚀 The main entry point that orchestrates the entire multi-modal generation process."""
-    if not omni_prompt and not omni_file: raise gr.Error("Please provide a prompt or upload a file.")
+    if not omni_prompt and not omni_files: raise gr.Error("Please provide a prompt or upload at least one file.")
     if not output_formats: raise gr.Error("Please select at least one output format.")
     
-    # Get deployment names from the UI selection
     chat_deployment = AZURE_DEPLOYMENT_NAMES.get(chat_model)
     transcribe_deployment = AZURE_DEPLOYMENT_NAMES.get(transcribe_model)
     if not chat_deployment: raise gr.Error(f"Deployment for model '{chat_model}' not found in configuration.")
@@ -232,18 +266,31 @@ def generate_outputs_api(omni_file, omni_prompt, chat_model, transcribe_model, o
 
     # --- Step 1: Omni-Model Processing ---
     md_content = ""
-    if omni_file:
-        file_path = Path(omni_file.name)
-        file_ext = file_path.suffix.lower()
-        if file_ext in ['.png', '.jpg', '.jpeg']:
-            md_content = process_image_input(omni_file, omni_prompt, chat_deployment)
-        elif file_ext in ['.wav', '.mp3', '.m4a']:
+    # Process files first
+    if omni_files:
+        # Check for multiple file types
+        file_paths = [Path(f.name) for f in omni_files]
+        extensions = {p.suffix.lower() for p in file_paths}
+
+        if '.md' in extensions:
+            md_content = "\n\n".join([p.read_text(encoding='utf-8') for p in file_paths if p.suffix.lower() == '.md'])
+        elif '.pdf' in extensions:
+             # For simplicity, we process only the first PDF if multiple are uploaded for OCR
+            pdf_file = next((f for f in omni_files if Path(f.name).suffix.lower() == '.pdf'), None)
+            ocr_prompt = omni_prompt if omni_prompt else "Extract all text from the following document pages."
+            md_content = process_pdf_input(pdf_file, ocr_prompt, chat_deployment, progress)
+        elif '.png' in extensions or '.jpg' in extensions or '.jpeg' in extensions:
+            image_file = next((f for f in omni_files if Path(f.name).suffix.lower() in ['.png', '.jpg', '.jpeg']), None)
+            md_content = process_image_input(image_file, omni_prompt, chat_deployment)
+        elif '.wav' in extensions or '.mp3' in extensions or '.m4a' in extensions:
             if not transcribe_deployment: raise gr.Error(f"Deployment for model '{transcribe_model}' not found.")
-            md_content = process_audio_input(omni_file, omni_prompt, chat_deployment, transcribe_deployment)
+            audio_file = next((f for f in omni_files if Path(f.name).suffix.lower() in ['.wav', '.mp3', '.m4a']), None)
+            md_content = process_audio_input(audio_file, omni_prompt, chat_deployment, transcribe_deployment)
+    # If no files, process text prompt
     elif omni_prompt:
         md_content = process_text_input(omni_prompt, chat_deployment)
     
-    if not md_content: raise gr.Error("Failed to get a response from the AI model.")
+    if not md_content: raise gr.Error("Failed to generate source content from the provided input.")
     
     # --- Step 2: Generate Selected Document Formats ---
     generated_files = []
@@ -277,12 +324,10 @@ def generate_outputs_api(omni_file, omni_prompt, chat_model, transcribe_model, o
 
 # --- 🎨 Gradio UI Definition ---
 AVAILABLE_FONTS, EMOJI_FONT_NAME = register_local_fonts()
-SAMPLE_MARKDOWN = "# Deities Guide\n\n- **Purpose**: Explore deities and their morals! \n- **Themes**: Justice ⚖️, faith 🙏\n\n# Arthurian Legends\n\n - **Merlin, Arthur**: Mentor 🧙, son 👑.\n - **Lesson**: Honor 🎖️ vs. betrayal 🗡️."
-with open(CWD / "sample.md", "w", encoding="utf-8") as f: f.write(SAMPLE_MARKDOWN)
 
 with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as demo:
     gr.Markdown("# 🧠 Omni-Model Document Generator (PDF, DOCX, XLSX)")
-    gr.Markdown("Provide a prompt, an image, or an audio file. The AI will process it, and you can generate documents from the result.")
+    gr.Markdown("Provide a prompt, or upload a Markdown, PDF, Image, or Audio file. The AI will process it, and you can generate documents from the result.")
 
     with gr.Row():
         with gr.Column(scale=1):
@@ -295,7 +340,7 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as
             selected_transcribe_model = gr.Dropdown(choices=transcribe_models, label="Select Transcription Model (for audio)", value=transcribe_models[0])
 
             omni_prompt = gr.Textbox(label="Prompt", lines=3, placeholder="Ask a question, or provide instructions for a file...")
-            omni_file = gr.File(label="Upload Image or Audio File (Optional)", file_types=["image", ".wav", ".mp3"])
+            omni_files = gr.File(label="Upload File(s) (Optional)", file_count="multiple", file_types=["image", ".wav", ".mp3", ".md", ".pdf"])
             
             gr.Markdown("### 📄 Output Settings")
             output_formats = gr.CheckboxGroup(choices=["PDF", "DOCX", "XLSX"], label="Select Output Formats", value=["PDF"])
@@ -317,7 +362,7 @@ with gr.Blocks(theme=gr.themes.Soft(), title="Omni-Model Document Generator") as
             downloadable_files_output = gr.Files(label="Download Generated Files")
             
     generate_btn.click(fn=generate_outputs_api, 
-                       inputs=[omni_file, omni_prompt, selected_chat_model, selected_transcribe_model, output_formats, selected_layouts, selected_fonts, num_columns_slider, page_w_mult_slider, page_h_mult_slider], 
+                       inputs=[omni_files, omni_prompt, selected_chat_model, selected_transcribe_model, output_formats, selected_layouts, selected_fonts, num_columns_slider, page_w_mult_slider, page_h_mult_slider], 
                        outputs=[ai_response_output, gallery_output, downloadable_files_output])
 
 if __name__ == "__main__":
