@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows File Stacks</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-200">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    // Icon mapping for Windows-like appearance
+    const getFileIcon = (name) => {
+      const ext = name.split('.').pop().toLowerCase();
+      if (['jpg', 'png', 'gif', 'bmp'].includes(ext)) return '📷';
+      if (['txt', 'md', 'log'].includes(ext)) return '📄';
+      if (['pdf'].includes(ext)) return '📋';
+      if (['doc', 'docx'].includes(ext)) return '📝';
+      if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
+      if (['js', 'py', 'html', 'css'].includes(ext)) return '💻';
+      if (['exe', 'bat'].includes(ext)) return '⚙️';
+      if (['zip', 'rar'].includes(ext)) return '📦';
+      return '📁';
+    };
+
+    // Common Windows system files and problematic extensions to skip
+    const skipFiles = [
+      'desktop.ini',
+      'thumbs.db',
+      '.ds_store',
+      '.lnk', // Shortcuts
+      '.sys', // System files
+      '.dll', // Dynamic link libraries
+    ];
+
+    const App = () => {
+      const [files, setFiles] = useState([]);
+      const [sortBy, setSortBy] = useState('name');
+      const [stackBy, setStackBy] = useState('none');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      // Fetch files from selected directory
+      const handleSelectDirectory = async () => {
+        setLoading(true);
+        setError('');
+        try {
+          const dirHandle = await window.showDirectoryPicker();
+          const fileList = [];
+          for await (const entry of dirHandle.values()) {
+            if (entry.kind === 'file') {
+              try {
+                const file = await entry.getFile();
+                const name = file.name.toLowerCase();
+                // Skip system files, shortcuts, and problematic extensions
+                if (
+                  skipFiles.includes(name) ||
+                  skipFiles.some((ext) => name.endsWith(ext)) ||
+                  name.startsWith('~$') // OneDrive/Office temp files
+                ) {
+                  continue;
+                }
+                fileList.push({
+                  name: file.name,
+                  size: file.size,
+                  dateModified: file.lastModified,
+                  dateCreated: file.lastModified, // Creation date unreliable
+                  type: file.type || file.name.split('.').pop() || 'unknown',
+                  icon: getFileIcon(file.name),
+                });
+              } catch (fileErr) {
+                console.warn(`Skipped file ${entry.name}: ${fileErr.message}`);
+                setError((prev) => prev + `Skipped ${entry.name} (access denied or system file). `);
+              }
+            }
+          }
+          setFiles(fileList);
+          if (fileList.length === 0) {
+            setError('No accessible files found. Try a different folder (e.g., Desktop or Documents).');
+          }
+        } catch (err) {
+          console.error('Directory error:', err);
+          setError('Failed to access directory. Ensure you selected a valid folder (e.g., Desktop).');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Get first word for name stacking
+      const getFirstWord = (name) => {
+        return name.split(/[\s_-]/)[0].toLowerCase();
+      };
+
+      // Group files into stacks
+      const getStacks = () => {
+        let grouped = {};
+        if (stackBy === 'name') {
+          files.forEach((file) => {
+            const key = getFirstWord(file.name);
+            grouped[key] = grouped[key] || [];
+            grouped[key].push(file);
+          });
+        } else if (stackBy === 'dateCreated' || stackBy === 'dateModified') {
+          files.forEach((file) => {
+            const date = new Date(file[stackBy === 'dateCreated' ? 'dateCreated' : 'dateModified']);
+            const key = date.toDateString();
+            grouped[key] = grouped[key] || [];
+            grouped[key].push(file);
+          });
+        } else {
+          grouped['all'] = files;
+        }
+
+        // Sort files within each stack
+        Object.keys(grouped).forEach((key) => {
+          grouped[key].sort((a, b) => {
+            if (sortBy === 'name') return a.name.localeCompare(b.name);
+            if (sortBy === 'size') return a.size - b.size;
+            if (sortBy === 'dateModified') return a.dateModified - b.dateModified;
+            if (sortBy === 'dateCreated') return a.dateCreated - b.dateCreated;
+            if (sortBy === 'type') return a.type.localeCompare(b.type);
+            return 0;
+          });
+        });
+
+        return grouped;
+      };
+
+      const stacks = getStacks();
+
+      return (
+        <div className="p-6 max-w-7xl mx-auto">
+          <h1 className="text-3xl font-bold mb-6 text-gray-800">Windows File Stacks</h1>
+          <div className="mb-6">
+            <button
+              onClick={handleSelectDirectory}
+              disabled={loading}
+              className={`px-6 py-2 bg-blue-600 text-white rounded-md shadow-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors`}
+            >
+              {loading ? 'Loading...' : 'Select Folder (e.g., Desktop)'}
+            </button>
+            <p className="mt-2 text-sm text-gray-600">
+              Tip: Choose your Desktop (C:\Users\YourUser\Desktop) or OneDrive Desktop folder.
+            </p>
+          </div>
+          {error && (
+            <div className="mb-6 p-4 bg-red-100 text-red-700 rounded-md">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+          <div className="mb-6 flex flex-col sm:flex-row sm:space-x-6">
+            <div className="mb-4 sm:mb-0">
+              <label className="mr-2 font-medium text-gray-700">Sort By:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="border border-gray-300 rounded-md p-2 bg-white shadow-sm"
+              >
+                <option value="name">Name</option>
+                <option value="size">Size</option>
+                <option value="dateModified">Date Modified</option>
+                <option value="dateCreated">Date Created</option>
+                <option value="type">Item Type</option>
+              </select>
+            </div>
+            <div>
+              <label className="mr-2 font-medium text-gray-700">Stack By:</label>
+              <select
+                value={stackBy}
+                onChange={(e) => setStackBy(e.target.value)}
+                className="border border-gray-300 rounded-md p-2 bg-white shadow-sm"
+              >
+                <option value="none">None</option>
+                <option value="name">Name</option>
+                <option value="dateCreated">Date Created</option>
+                <option value="dateModified">Date Modified</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-6">
+            {Object.keys(stacks).map((stackKey) => (
+              <div key={stackKey} className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800">
+                  {stackBy === 'none' ? 'All Files' : stackKey}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                  {stacks[stackKey].map((file) => (
+                    <div
+                      key={file.name}
+                      className="flex flex-col items-center text-center p-2 hover:bg-gray-100 rounded-md transition-colors"
+                    >
+                      <span className="text-4xl mb-2">{file.icon}</span>
+                      <span className="text-sm text-gray-800 truncate w-24">{file.name}</span>
+                      <span className="text-xs text-gray-500">
+                        {sortBy === 'size' && `${(file.size / 1024).toFixed(1)} KB`}
+                        {(sortBy === 'dateModified' || sortBy === 'dateCreated') &&
+                          new Date(
+                            file[sortBy === 'dateModified' ? 'dateModified' : 'dateCreated']
+                          ).toLocaleDateString()}
+                        {sortBy === 'type' && file.type}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
